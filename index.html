@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ювелирный дом  Мерцара</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0b0814;
+    --plum: #1d1432;
+    --gold: #e6bd62;
+    --gold-pale: #f7e6b8;
+    --text: #f3ead6;
+    color-scheme: dark;
+  }
+  :root:not([data-theme="light"]) { --ink: #0b0814; }
+  :root[data-theme="dark"] { --ink: #0b0814; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ink); color: var(--text); }
+  body {
+    font-family: 'Jost', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: radial-gradient(120% 90% at 50% 40%, var(--plum) 0%, var(--ink) 70%) fixed, var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  #scene {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    display: block; touch-action: pan-y;
+  }
+  .spacer { height: 700vh; }
+
+  .brand {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 3;
+    padding: calc(env(safe-area-inset-top, 0px) + 18px) 16px 0;
+    text-align: center; pointer-events: none;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 26px; font-weight: 600; letter-spacing: .12em;
+    color: var(--gold-pale);
+  }
+
+  .caption {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 3;
+    padding: 0 28px calc(env(safe-area-inset-bottom, 0px) + 40px);
+    text-align: center; pointer-events: none;
+    opacity: 0; transition: opacity .5s ease;
+  }
+  .caption.on { opacity: 1; }
+  .caption h2 {
+    margin: 0 0 8px; font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 500; font-style: italic;
+    font-size: clamp(30px, 8vw, 52px); line-height: 1.05; color: var(--gold-pale);
+  }
+  .caption p { margin: 0 auto; max-width: 30ch; font-weight: 300; font-size: 16px; line-height: 1.5; opacity: .82; }
+  .caption a {
+    display: inline-block; margin-top: 18px; padding: 14px 28px;
+    border: 1px solid var(--gold); border-radius: 999px;
+    color: var(--ink); background: var(--gold); text-decoration: none;
+    font-weight: 400; font-size: 16px; pointer-events: none;
+  }
+  .caption.on a { pointer-events: auto; }
+  .caption a:focus-visible { outline: 2px solid var(--gold-pale); outline-offset: 3px; }
+
+  #flash {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0;
+    background: radial-gradient(circle at 50% 46%, rgba(255,240,200,.95), rgba(255,215,130,0) 62%);
+  }
+  .choices { display: flex; gap: 12px; justify-content: center; margin-top: 18px; }
+  .choices a { margin-top: 0; }
+  .choices a:last-child { background: transparent; color: var(--gold-pale); }
+  @media (prefers-reduced-motion: reduce) { .caption { transition: none; } }
+</style>
+</head>
+<body>
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div id="flash"></div>
+  <div class="brand">Мерцара</div>
+
+  <div class="caption on" data-from="0" data-to="0.26">
+    <h2>Звёздная пыль</h2>
+    <p>Листай вниз и выбери коллекцию</p>
+  </div>
+  <div class="caption" data-from="0.27" data-to="0.5">
+    <h2>Каждый камень на месте</h2>
+  </div>
+  <div class="caption" data-from="0.51" data-to="0.72">
+    <h2>Одна звезда</h2>
+    <p>Нажимай на камни, они откликаются</p>
+  </div>
+  <div class="caption" data-from="0.78" data-to="1.1">
+    <h2>Наши новые коллекции</h2>
+    <p>Тёплое золото или холодное серебро</p>
+    <div class="choices">
+      <a href="silver.html">Смотреть коллекцию «Серебро»</a>
+      <a href="gold.html">Смотреть коллекцию «Золото»</a>
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <script src="three.min.js"></script>
+  <script src="GLTFLoader.js"></script>
+  <script>
+  (() => {
+    const N = 200;
+    const CAM_Z = 30;
+    const clamp01 = v => Math.min(1, Math.max(0, v));
+    const ph = (s, a, b) => clamp01((s - a) / (b - a));
+    const stagger = (p, delay, spread) => clamp01((p - delay * spread) / (1 - spread));
+    const ease = t => (t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+    const easeOut = t => 1 - Math.pow(1 - t, 3);
+    const smooth = t => t * t * (3 - 2 * t);
+    const bounce = t => {
+      const n = 7.5625, d = 2.75;
+      if (t < 1 / d) return n * t * t;
+      if (t < 2 / d) { t -= 1.5 / d; return n * t * t + .75; }
+      if (t < 2.5 / d) { t -= 2.25 / d; return n * t * t + .9375; }
+      t -= 2.625 / d; return n * t * t + .984375;
+    };
+
+
+    const canvas = document.getElementById('scene');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
+    camera.position.set(0, 0, CAM_Z);
+
+    scene.add(new THREE.HemisphereLight(0xfff1d0, 0x2a2040, 1.0));
+    const key = new THREE.DirectionalLight(0xffffff, 2.2);
+    key.position.set(8, 14, 20);
+    scene.add(key);
+    const rim = new THREE.PointLight(0xffc477, 2.2, 90);
+    scene.add(rim);
+
+
+
+    function starGeometry() {
+      const sh = new THREE.Shape();
+      for (let k = 0; k < 10; k++) {
+        const a = Math.PI / 2 + k * Math.PI / 5;
+        const r = k % 2 ? 0.45 : 1;
+        const x = Math.cos(a) * r, y = Math.sin(a) * r;
+        k ? sh.lineTo(x, y) : sh.moveTo(x, y);
+      }
+      sh.closePath();
+      const g = new THREE.ExtrudeGeometry(sh, {
+        depth: 0.35, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.06, bevelSegments: 2
+      });
+      g.translate(0, 0, -0.175);
+      return g;
+    }
+
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xe2b24a, metalness: 0.6, roughness: 0.28,
+      emissive: 0xffb347, emissiveIntensity: 0
+    });
+    const mesh = new THREE.InstancedMesh(starGeometry(), material, N);
+    mesh.frustumCulled = false;          
+    scene.add(mesh);
+
+      new THREE.GLTFLoader().load('untitled.glb', (gltf) => {
+      let g;
+      gltf.scene.traverse((c) => { if (c.isMesh) g = c.geometry; });
+      if (!g) return console.error('В модели нет Mesh');
+      g = g.clone();
+      g.center();
+      g.computeBoundingSphere();
+      const k = 1 / g.boundingSphere.radius;
+      g.scale(k, k, k);
+      mesh.geometry = g;
+    }, undefined, (err) => console.error(err));
+
+    function spriteTexture() {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const x = c.getContext('2d');
+      const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, 'rgba(255,255,255,1)');
+      g.addColorStop(.25, 'rgba(255,232,170,.8)');
+      g.addColorStop(1, 'rgba(255,200,100,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+      return new THREE.CanvasTexture(c);
+    }
+    const SPARKS = 320;
+    const sparkGeo = new THREE.BufferGeometry();
+    sparkGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SPARKS * 3), 3));
+    const sparkMat = new THREE.PointsMaterial({
+      map: spriteTexture(), size: 0.9, sizeAttenuation: true, transparent: true,
+      opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, color: 0xffe3a0
+    });
+    const sparks = new THREE.Points(sparkGeo, sparkMat);
+    sparks.frustumCulled = false;
+    scene.add(sparks);
+
+
+    const V = () => new THREE.Vector3();
+    const start = [], pile = [], frameT = [], starT = [], dir = [], cur = [], off = [], rot0 = [];
+    const dist = new Float32Array(N), dFall = new Float32Array(N), dFrame = new Float32Array(N),
+          dStar = new Float32Array(N), spin = new Float32Array(N), ph0 = new Float32Array(N),
+          kick = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      start.push(V()); pile.push(V()); frameT.push(V()); starT.push(V());
+      dir.push(V()); cur.push(V()); off.push(V());
+      rot0.push(new THREE.Vector3(Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28));
+      dFall[i] = Math.random(); dStar[i] = Math.random();
+      spin[i] = (Math.random() - .5) * 2.4; ph0[i] = Math.random() * 6.28;
+      mesh.setColorAt(i, new THREE.Color(1, 1, 1));
+    }
+
+    let viewW = 1, viewH = 1, starR = 0.3, bigR = 5, pushR = 5;
+
+    function rectPoint(u, x1, x2, y1, y2, out) {
+      const W = x2 - x1, H = y2 - y1, L = 2 * (W + H);
+      let d = (u % 1) * L;
+      if (d < W) return out.set(x1 + d, y1, 0);                 
+      d -= W; if (d < H) return out.set(x2, y1 + d, 0);      
+      d -= H; if (d < W) return out.set(x2 - d, y2, 0);        
+      d -= W; return out.set(x1, y2 - d, 0);                   
+    }
+    function starPoint(u, R, cx, cy, out) {
+      const t = (u % 1) * 10, k = Math.floor(t), f = t - k;
+      const pt = j => {
+        const a = Math.PI / 2 + j * Math.PI / 5, r = (j % 2 ? 0.45 : 1) * R;
+        return [Math.cos(a) * r, Math.sin(a) * r];
+      };
+      const A = pt(k), B = pt(k + 1);
+      return out.set(cx + A[0] + (B[0] - A[0]) * f, cy + A[1] + (B[1] - A[1]) * f, 0);
+    }
+
+    function layout() {
+      const w = window.innerWidth, h = window.innerHeight;
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
+      viewH = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z;
+      viewW = viewH * camera.aspect;
+
+      
+      const x1 = -viewW / 2 + viewW * 0.07, x2 = viewW / 2 - viewW * 0.07;
+      const y1 = -viewH / 2 + viewH * 0.26, y2 = viewH / 2 - viewH * 0.1;
+      const cx = 0, cy = (y1 + y2) / 2;
+      const perim = 2 * ((x2 - x1) + (y2 - y1));
+      starR = Math.min(0.55, Math.max(0.16, (perim / N) * 0.5));
+      bigR = Math.min((x2 - x1) / 2, (y2 - y1) / 2) * 0.88;
+      pushR = viewW * 0.2;
+
+    
+      const weights = [1, .8, .6, .4, .2], wsum = 3;
+      const counts = weights.map(wt => Math.round(N * wt / wsum));
+      counts[0] += N - counts.reduce((a, b) => a + b, 0);
+      let idx = 0;
+      weights.forEach((wt, layer) => {
+        for (let j = 0; j < counts[layer]; j++, idx++) {
+          starPoint(j / counts[layer], bigR * wt, cx, cy, starT[idx]);
+        }
+      });
+
+      for (let i = 0; i < N; i++) {
+        rectPoint(i / N, x1, x2, y1, y2, frameT[i]);
+        dFrame[i] = (frameT[i].y - y1) / (y2 - y1);             
+        start[i].set((Math.random() - .5) * viewW * .95,
+                    y1 + Math.random() * (y2 - y1), (Math.random() - .5) * 10);
+        pile[i].set((Math.random() - .5) * viewW * .85,
+                    y1 - starR + Math.random() * viewH * .05, (Math.random() - .5) * 4);
+        dir[i].set(starT[i].x - cx + (Math.random() - .5) * 2,
+                  starT[i].y - cy + (Math.random() - .5) * 2,
+                  (Math.random() - .5) * 3).normalize();
+        dist[i] = (0.25 + Math.random() * 0.55) * Math.max(viewW, viewH) * 0.6;
+      }
+      // искры
+      const p = sparkGeo.attributes.position;
+      for (let i = 0; i < SPARKS; i++) {
+        p.setXYZ(i, (Math.random() - .5) * viewW * 1.1, (Math.random() - .5) * viewH * 1.0,
+                (Math.random() - .5) * 14);
+      }
+      p.needsUpdate = true;
+    }
+
+
+    let sT = 0, sS = 0;
+    const caps = [...document.querySelectorAll('.caption')];
+    const flash = document.getElementById('flash');
+    function onScroll() {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      sT = max > 0 ? clamp01(window.scrollY / max) : 0;
+    }
+
+
+    const ptr = new THREE.Vector2();
+    let ptrOn = false, down = null;
+    const toWorld = (cx, cy) => ptr.set(((cx / innerWidth) * 2 - 1) * viewW / 2,
+                                        -((cy / innerHeight) * 2 - 1) * viewH / 2);
+    addEventListener('pointermove', e => { toWorld(e.clientX, e.clientY); ptrOn = true; });
+    addEventListener('pointerdown', e => {
+      toWorld(e.clientX, e.clientY); ptrOn = true;
+      down = { x: e.clientX, y: e.clientY, t: performance.now() };
+    });
+    addEventListener('pointerup', e => {
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 12 &&
+          performance.now() - down.t < 500) {
+        toWorld(e.clientX, e.clientY);
+        const R = Math.max(viewW * 0.22, starR * 6);
+        for (let i = 0; i < N; i++) {
+          const d = Math.hypot(cur[i].x - ptr.x, cur[i].y - ptr.y);
+          if (d < R) kick[i] = Math.max(kick[i], 1 - d / R);
+        }
+      }
+      down = null;
+      if (e.pointerType !== 'mouse') ptrOn = false;
+    });
+    addEventListener('pointercancel', () => { down = null; ptrOn = false; });
+    document.addEventListener('mouseleave', () => { ptrOn = false; });
+
+
+    const dummy = new THREE.Object3D();
+    const p = new THREE.Vector3();
+    const color = new THREE.Color();
+    let last = performance.now();
+
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const dt = Math.min(0.05, (now - last) / 1000) || 0.016; last = now;
+      const t = now / 1000;
+      sS += (sT - sS) * (1 - Math.exp(-dt * 7));
+      const s = sS;
+
+      const pF = ph(s, .05, .27), pB = ph(s, .27, .50), pC = ph(s, .50, .72), pE = ph(s, .74, .92);
+      const e = easeOut(pE);
+      const shine = smooth(ph(s, .58, .74)) * 0.6 + e * 1.4;
+      material.emissiveIntensity = shine * (0.88 + 0.12 * Math.sin(t * 6));
+
+      for (let i = 0; i < N; i++) {
+        p.copy(start[i]).lerp(pile[i], bounce(stagger(pF, dFall[i], .5)));
+        const b = ease(stagger(pB, dFrame[i], .6));
+        p.lerp(frameT[i], b);
+        const c = ease(stagger(pC, dStar[i], .5));
+        p.lerp(starT[i], c);
+        p.addScaledVector(dir[i], dist[i] * e);
+
+  const idle = 1 - pF;                                  
+        p.x += Math.sin(t * .8 + ph0[i]) * 0.25 * idle;
+        p.y += Math.cos(t * .6 + ph0[i]) * 0.25 * idle;
+
+    
+        const o = off[i];
+        let tx = 0, ty = 0;
+        if (ptrOn) {
+          const dx = p.x - ptr.x, dy = p.y - ptr.y, d = Math.hypot(dx, dy);
+          if (d < pushR && d > 0.001) {
+            const k = Math.pow(1 - d / pushR, 2) * viewW * 0.07;
+            tx = dx / d * k; ty = dy / d * k;
+          }
+        }
+        o.x += (tx - o.x) * 0.2; o.y += (ty - o.y) * 0.2;
+        p.x += o.x; p.y += o.y;
+        cur[i].copy(p);
+
+
+        let kk = kick[i];
+        if (kk > 0) kick[i] = kk = Math.max(0, kk - dt * 1.6);
+
+        dummy.position.copy(p);
+        dummy.rotation.set(
+          (rot0[i].x + t * spin[i]) * (1 - b) + Math.sin(t + ph0[i]) * 0.2 * b,
+          (rot0[i].y + t * spin[i]) * (1 - b) + Math.sin(t * 1.2 + ph0[i]) * 0.6 * b + e * (6 + ph0[i]) + kk * 6,
+          rot0[i].z * (1 - b)
+        );
+        dummy.scale.setScalar(starR * (1 + c * 0.5 + e * 0.4 + kk * 1.2));
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+
+        const br = 1 + kk * 0.9;
+        mesh.setColorAt(i, color.setRGB(br, br, br));
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.instanceColor.needsUpdate = true;
+
+      rim.position.set(Math.sin(t * .7) * 12, Math.cos(t * .5) * 10, 10);
+      sparkMat.opacity = smooth(ph(s, .74, .84)) * (0.7 + 0.3 * Math.sin(t * 5));
+      sparks.rotation.z = t * 0.03;
+      flash.style.opacity = Math.max(0, 1 - Math.abs(s - .775) / .035) * 0.85;
+
+      caps.forEach(el => {
+        el.classList.toggle('on', s >= +el.dataset.from && s <= +el.dataset.to);
+      });
+      renderer.render(scene, camera);
+    }
+
+    addEventListener('resize', () => { layout(); onScroll(); });
+    addEventListener('scroll', onScroll, { passive: true });
+    layout(); onScroll(); sS = sT;
+    requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>
+
+<script>
+    if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+    }
+    window.scrollTo(0, 0);
+    </script>

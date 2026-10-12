@@ -1,0 +1,119 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ювелирный дом  Мерцара</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Jost:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0b0814;
+    --plum: #1d1432;
+    --gold: #e6bd62;
+    --gold-pale: #f7e6b8;
+    --text: #f3ead6;
+    --silver-pale: #e8ecf5; 
+    color-scheme: dark;
+
+  }
+  :root:not([data-theme="light"]) { --ink: #0b0814; }
+  :root[data-theme="dark"] { --ink: #0b0814; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ink); color: var(--text); }
+  body {
+    font-family: 'Jost', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: radial-gradient(120% 90% at 50% 40%, var(--plum) 0%, var(--ink) 70%) fixed, var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  #scene {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    display: block; touch-action: pan-y;
+  }
+  .spacer { height: 700vh; }
+
+  .brand {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 3;
+    padding: calc(env(safe-area-inset-top, 0px) + 18px) 16px 0;
+    text-align: center; pointer-events: none;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 26px; font-weight: 600; letter-spacing: .12em;
+    color: var(--silver-pale);
+  }
+
+  .caption {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 3;
+    padding: 0 28px calc(env(safe-area-inset-bottom, 0px) + 40px);
+    text-align: center; pointer-events: none;
+    opacity: 0; transition: opacity .5s ease;
+  }
+  .caption.on { opacity: 1; }
+  .caption h2 {
+    margin: 0 0 8px; font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 500; font-style: italic;
+    font-size: clamp(30px, 8vw, 52px); line-height: 1.05; color: var(--silver-pale);
+  }
+  .caption p { margin: 0 auto; max-width: 30ch; font-weight: 300; font-size: 16px; line-height: 1.5; opacity: .82; }
+  .caption a {
+    display: inline-block; margin-top: 18px; padding: 14px 28px;
+    border: 1px solid var(--silver); border-radius: 999px;
+    color: var(--ink); background: var(--silver); text-decoration: none;
+    font-weight: 400; font-size: 16px; pointer-events: none;
+  }
+  .caption a { color: #fff; border: 1px solid #fff; padding: 10px 20px; }
+  .caption.on a { pointer-events: auto; }
+  .caption a:focus-visible { outline: 2px solid var(--gold-pale); outline-offset: 3px; }
+
+  #flash {
+    position: fixed; inset: 0; z-index: 2; pointer-events: none; opacity: 0;
+    background: radial-gradient(circle at 50% 46%, rgba(255,240,200,.95), rgba(255,215,130,0) 62%);
+  }
+  .choices { display: flex; gap: 12px; justify-content: center; margin-top: 18px; }
+  .choices a { margin-top: 0; }
+  .choices a:last-child { background: transparent; color: var(--silver-pale); }
+  @media (prefers-reduced-motion: reduce) { .caption { transition: none; } }
+</style>
+</head>
+<body>
+  <canvas id="scene" aria-hidden="true"></canvas>
+  <div id="flash"></div>
+  <div class="brand">Серебро</div>
+
+  <div class="caption on" data-from="0" data-to="0.26">
+    <h2>Звёздная пыль</h2>
+    <p>Листай вниз</p>
+  </div>
+  <div class="caption" data-from="0.27" data-to="0.5">
+    <h2>Каждый камень на своем месте</h2>
+  </div>
+  <div class="caption" data-from="0.51" data-to="0.72">
+    <h2>Одно кольцо</h2>
+  </div>
+  <div class="caption" data-from="0.78" data-to="1.1">
+    <h2>Наша новая коллекция «Серебро»</h2>
+    <div class="choices">
+      <a href="index.html">К нашим коллекциям</a>
+      <a href="gold.html">Смотреть коллекцию «Золото»</a>
+    </div>
+  </div>
+  <div class="spacer"></div>
+
+
+<script src="three.min.js"></script>
+<script src="GLTFLoader.js"></script>
+<script>
+    window.COLLECTION = {
+    color: 0xcfd6e4, emissive: 0x9fc4ff, spark: 0xd8ecff, light: 0x9ec5ff,
+    metalness: 0.85, roughness: 0.2, glow: 1.3
+    };
+</script>
+<script src="ring.js"></script>
+
+<script>
+    if ('scrollRestoration' in history) {
+        history.scrollRestoration = 'manual';
+    }
+    window.scrollTo(0, 0);
+    </script>
